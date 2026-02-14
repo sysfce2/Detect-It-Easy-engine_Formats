@@ -3974,17 +3974,26 @@ qint64 XBinary::find_signature(_MEMORY_MAP *pMemoryMap, qint64 nOffset, qint64 n
 
             qint32 nSearchFirstIndex = 0;
             qint64 nDelta = 0;
+            ST stIndex = ST_COMPAREBYTES;
+            qint64 nSearchMaxSize = 0;
 
             if (!_sSignature.contains(QChar('+'))) {
                 qint32 nNumberOfRecords = listSignatureRecords.count();
-                qint64 nMaxSize = 0;
                 qint64 nCurrentDelta = 0;
 
                 for (qint32 i = 0; i < nNumberOfRecords; i++) {
                     if ((listSignatureRecords.at(i).st == ST_ADDRESS) || (listSignatureRecords.at(i).st == ST_RELOFFSET)) {
                         break;
-                    } else if ((listSignatureRecords.at(i).nWindowSize > nMaxSize) && (listSignatureRecords.at(i).st == ST_COMPAREBYTES)) {
-                        nMaxSize = listSignatureRecords.at(i).nWindowSize;
+                    } else if ((listSignatureRecords.at(i).nWindowSize > nSearchMaxSize) && (
+                                   (listSignatureRecords.at(i).st == ST_COMPAREBYTES) ||
+                                   (listSignatureRecords.at(i).st == ST_FINDBYTES) ||
+                                   (listSignatureRecords.at(i).st == ST_NOTNULL) ||
+                                   (listSignatureRecords.at(i).st == ST_ANSI) ||
+                                   (listSignatureRecords.at(i).st == ST_NOTANSI) ||
+                                   (listSignatureRecords.at(i).st == ST_NOTANSIANDNULL) ||
+                                   (listSignatureRecords.at(i).st == ST_ANSINUMBER))) {
+                        nSearchMaxSize = listSignatureRecords.at(i).nWindowSize;
+                        stIndex = listSignatureRecords.at(i).st;
                         nDelta = nCurrentDelta;
                         nSearchFirstIndex = i;
                     }
@@ -4004,7 +4013,14 @@ qint64 XBinary::find_signature(_MEMORY_MAP *pMemoryMap, qint64 nOffset, qint64 n
                 qint32 nDataSize = baData.size();
 
                 for (qint64 i = 0; (i < nTmpSize) && (!(pPdStruct->bIsStop));) {
-                    qint64 nCurrentOffset = _find_array(ST_COMPAREBYTES, nTmpOffset + i, nTmpSize - i, pData, nDataSize, pPdStruct);
+                    qint64 nCurrentOffset = -1;
+
+                    if ((stIndex == ST_COMPAREBYTES) ||
+                        (stIndex == ST_FINDBYTES)) {
+                        nCurrentOffset = _find_array(stIndex, nTmpOffset + i, nTmpSize - i, pData, nDataSize, pPdStruct);
+                    } else {
+                        nCurrentOffset = _find_array(stIndex, nTmpOffset + i, nTmpSize - i, 0, nSearchMaxSize, pPdStruct);
+                    }
 
                     if (nCurrentOffset != -1) {
                         if (_compareSignature(pMemoryMap, &listSignatureRecords, nCurrentOffset - nDelta, pPdStruct)) {
